@@ -1,26 +1,37 @@
 package ai.metaphor.api.auth;
 
+import ai.metaphor.api.auth.identity.Identity;
+import ai.metaphor.api.auth.identity.IdentitySession;
 import ai.metaphor.api.exception.AuthException;
 import ai.metaphor.api.identity.User;
+import ai.metaphor.api.properties.AuthConfigProperties;
 import ai.metaphor.api.repository.UserRepository;
+import com.github.benmanes.caffeine.cache.Cache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
+import java.time.temporal.ChronoUnit;
 
 @Slf4j
 @Service
 public class AuthHandler {
 
-    private final Map<String, IdentitySession> identityMap = new HashMap<>();
+
     private final UserRepository userRepository;
     private final CredentialProvider credentialProvider;
+    private final Cache<String, IdentitySession> identitySessionCache;
+    private final long expirationTime;
 
-    public AuthHandler(UserRepository userRepository, CredentialProvider credentialProvider) {
+    public AuthHandler(UserRepository userRepository,
+                       CredentialProvider credentialProvider,
+                       Cache<String, IdentitySession> identitySessionCache,
+                       AuthConfigProperties authConfigProperties) {
         this.userRepository = userRepository;
         this.credentialProvider = credentialProvider;
+        this.identitySessionCache = identitySessionCache;
+        this.expirationTime = authConfigProperties.expirationTimeInMinutes();
     }
 
     public String authenticate(String username, String password) {
@@ -28,12 +39,9 @@ public class AuthHandler {
         User user = userRepository.findByUsernameAndPassword(username, password)
                 .orElseThrow(() -> new AuthException("Invalid credential."));
         String credential = credentialProvider.get(user);
-        Identity identity = new Identity(user.id(), user.role());
-        identityMap.put(
-                credential,
-                new IdentitySession(identity, Instant.now())
-        );
-        IdentityContextHolder.setAuthentication(identity);
+        Identity identity = new Identity(user.id(), user.username(), user.role());
+        Instant sessionExpirationTime = getSessionExpirationTime();
+        identitySessionCache.put(credential, new IdentitySession(identity, credential, sessionExpirationTime));
         return credential;
     }
 
@@ -42,13 +50,13 @@ public class AuthHandler {
             throw new AuthException("Invalid credential.");
         }
 
-        IdentitySession identitySession = identityMap.get(credential);
+        IdentitySession identitySession = identitySessionCache.getIfPresent(credential);
         if (identitySession == null) {
             throw new AuthException("Invalid credential.");
         }
 
-        if (!identitySession.expirationTime().isAfter(Instant.now())) {
-            identityMap.remove(credential);
+        if (!Instant.now().isBefore(identitySession.expirationTime())) {
+            identitySessionCache.invalidate(credential);
             throw new AuthException("Expired credentials.");
         }
 
@@ -57,7 +65,12 @@ public class AuthHandler {
 
     public void clearAuthentication(String credential) {
         if (credential != null) {
-            IdentityContextHolder.removeIdentity();
+            // TODO
+            identitySessionCache.invalidate(credential);
         }
+    }
+
+    private Instant getSessionExpirationTime() {
+        return Instant.now().plus(Duration.of(expirationTime, ChronoUnit.MINUTES));
     }
 }

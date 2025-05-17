@@ -1,6 +1,8 @@
 package ai.metaphor.api.service.impl;
 
 import ai.metaphor.api.auth.AuthHandler;
+import ai.metaphor.api.auth.identity.IdentitySession;
+import ai.metaphor.api.auth.identity.IdentitySessionContextHolder;
 import ai.metaphor.api.dto.request.AuthRequest;
 import ai.metaphor.api.dto.response.AuthResponse;
 import ai.metaphor.api.service.AuthService;
@@ -26,7 +28,8 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void logout() {
-
-        authHandler.clearAuthentication(null);
+        IdentitySession identitySession = IdentitySessionContextHolder.get();
+        log.info("Logging out identity = {}", identitySession.identity());
+        authHandler.clearAuthentication(IdentitySessionContextHolder.get().credential());
     }
 }

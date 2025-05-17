@@ -30,7 +30,8 @@ public class CredentialProvider {
     }
 
     private String generateNonce() {
-        // TODO: change
-        return UUID.randomUUID().toString();
+        return BASE64_ENCODER.encodeToString(
+                UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8)
+        );
     }
 }

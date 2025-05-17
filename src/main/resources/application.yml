@@ -3,3 +3,7 @@ server:
 
 users:
   filepath: users.csv
+
+auth:
+  expiration-time-in-minutes: 120
+  cache-size: 100
