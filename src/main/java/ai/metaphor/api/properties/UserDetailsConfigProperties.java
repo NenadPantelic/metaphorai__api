@@ -1,4 +1,4 @@
-package ai.metaphor.api.config;
+package ai.metaphor.api.properties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

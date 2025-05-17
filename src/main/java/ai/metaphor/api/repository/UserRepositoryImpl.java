@@ -1,6 +1,6 @@
 package ai.metaphor.api.repository;
 
-import ai.metaphor.api.config.UserDetailsConfig;
+import ai.metaphor.api.properties.UserDetailsConfigProperties;
 import ai.metaphor.api.identity.Role;
 import ai.metaphor.api.identity.User;
 import lombok.extern.slf4j.Slf4j;
@@ -9,10 +9,7 @@ import org.springframework.stereotype.Component;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Component
@@ -23,10 +20,10 @@ public class UserRepositoryImpl implements UserRepository {
     private final Map<String, User> usersByIdMap;
     private final Map<String, User> usersByUsernameMap;
 
-    public UserRepositoryImpl(UserDetailsConfig userDetailsConfig) {
+    public UserRepositoryImpl(UserDetailsConfigProperties userDetailsConfigProperties) {
         usersByIdMap = new HashMap<>();
         usersByUsernameMap = new HashMap<>();
-        loadUserEntries(userDetailsConfig.filepath());
+        loadUserEntries(userDetailsConfigProperties.filepath());
     }
 
     @Override
@@ -46,11 +43,16 @@ public class UserRepositoryImpl implements UserRepository {
 
     private void loadUserEntries(String filepath) {
         log.info("Loading user entries...");
-        int numOfUsers = 0;
+        int lineNo = 0;
 
         try (BufferedReader br = new BufferedReader(new FileReader(filepath))) {
             String line;
             while ((line = br.readLine()) != null) {
+                lineNo++;
+                if (lineNo == 1) {
+                    continue; // header
+                }
+
                 // displayName,username,password,role
                 String[] values = line.split(COMMA_DELIMITER);
 
@@ -59,19 +61,20 @@ public class UserRepositoryImpl implements UserRepository {
                         .displayName(values[0])
                         .username(values[1])
                         .password(values[2])
-                        .role(Role.valueOf(values[2]))
+                        .role(Role.valueOf(values[3]))
                         .build();
 
                 usersByIdMap.put(user.id(), user);
                 usersByUsernameMap.put(user.username(), user);
-                numOfUsers++;
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
-        if (numOfUsers == 0) {
+        if (usersByIdMap.isEmpty()) {
             throw new RuntimeException("No users loaded in. At least one user is needed...");
         }
+
+        log.info("Loaded {} user entries", usersByIdMap.size());
     }
 }
